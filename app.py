@@ -23,14 +23,37 @@ CATEGORY_COLORS = {
 CATEGORY_NAMES = list(CATEGORY_COLORS.keys())
 
 
-@st.cache_data
 def load_data():
-    """Load results.json."""
+    """Load results.json - NO CACHE."""
     results_path = Path('results.json')
     if not results_path.exists():
         return None
     with open(results_path, 'r') as f:
         return json.load(f)
+
+
+def get_date_bounds(data):
+    """Compute min/max published_at dates present in data."""
+    dates = []
+    if not data or 'categories' not in data:
+        return None, None
+    for cat_data in data['categories'].values():
+        for story in cat_data.get('stories', []):
+            for article in story.get('articles', []):
+                pub_date_str = article.get('published_at', '')
+                if not pub_date_str:
+                    continue
+                try:
+                    if 'T' in pub_date_str:
+                        pub_date = datetime.fromisoformat(pub_date_str.replace('Z', '+00:00')).date()
+                    else:
+                        pub_date = datetime.strptime(pub_date_str[:10], '%Y-%m-%d').date()
+                    dates.append(pub_date)
+                except Exception:
+                    continue
+    if not dates:
+        return None, None
+    return min(dates), max(dates)
 
 
 def create_scatter_plot(data, selected_categories):
@@ -366,7 +389,7 @@ def main():
         <div class="funnel-stage" style="background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);">
             <div class="funnel-value">{total_articles}</div>
             <div class="funnel-label">Total Articles</div>
-            <div style="font-size: 0.7rem; color: white; opacity: 0.8; margin-top: 3px;">({total_urls} URLs - {duplicate_urls} duplicate URLs)</div>
+            <div style="font-size: 0.7rem; color: white; opacity: 0.8; margin-top: 3px;">({duplicate_urls} duplicate URLs)</div>
         </div>
         <div class="funnel-arrow">→</div>
         <div class="funnel-stage" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
@@ -429,9 +452,15 @@ def main():
     filter_col1, filter_col2 = st.columns([1, 1])
     
     with filter_col1:
-        # Date picker - compact
-        min_date = datetime(2018, 1, 1).date()
-        max_date = datetime.now().date()
+        # Date picker - compact (data-driven)
+        data_min_date, data_max_date = get_date_bounds(data)
+        if data_min_date and data_max_date:
+            min_date = data_min_date
+            max_date = data_max_date
+        else:
+            min_date = datetime.now().date()
+            max_date = datetime.now().date()
+
         selected_date_range = st.date_input(
             "📅",
             value=(min_date, max_date),
@@ -464,7 +493,7 @@ def main():
                 return text
             return ''.join(char for char in text if ord(char) < 128 and (ord(char) >= 32 or char == '\n'))
         
-        # Get stories filtered by date and category
+        # Get stories filtered by date and category (dedupe by story)
         filtered_stories = []
         for cat_name, cat_data in data['categories'].items():
             # Apply category filter
@@ -472,43 +501,39 @@ def main():
                 continue
             
             for story in cat_data['stories']:
-                for article in story['articles']:
-                    # Parse published date
+                # Pick a representative article and story date (latest in story)
+                rep_article = story['articles'][0] if story['articles'] else {}
+                latest_date = None
+                for article in story.get('articles', []):
                     try:
                         pub_date_str = article.get('published_at', '')
-                        if pub_date_str:
-                            # Try parsing different date formats
-                            if 'T' in pub_date_str:
-                                pub_date = datetime.fromisoformat(pub_date_str.replace('Z', '+00:00')).date()
-                            else:
-                                pub_date = datetime.strptime(pub_date_str[:10], '%Y-%m-%d').date()
-                            
-                            # Apply date filter
-                            if len(selected_date_range) == 2:
-                                if selected_date_range[0] <= pub_date <= selected_date_range[1]:
-                                    # Clean the title
-                                    clean_title = clean_text(article['title'])
-                                    filtered_stories.append({
-                                        'title': clean_title,
-                                        'category': cat_name,
-                                        'source': article['source'],
-                                        'story_count': story['story_count'],
-                                        'summary': story['summary'],
-                                        'url': article.get('url', None),
-                                        'published_at': pub_date
-                                    })
-                    except:
-                        # If date parsing fails, include the article anyway with cleaned title
-                        clean_title = clean_text(article['title'])
-                        filtered_stories.append({
-                            'title': clean_title,
-                            'category': cat_name,
-                            'source': article['source'],
-                            'story_count': story['story_count'],
-                            'summary': story['summary'],
-                            'url': article.get('url', None),
-                            'published_at': None
-                        })
+                        if not pub_date_str:
+                            continue
+                        if 'T' in pub_date_str:
+                            pub_date = datetime.fromisoformat(pub_date_str.replace('Z', '+00:00')).date()
+                        else:
+                            pub_date = datetime.strptime(pub_date_str[:10], '%Y-%m-%d').date()
+                        if latest_date is None or pub_date > latest_date:
+                            latest_date = pub_date
+                            rep_article = article
+                    except Exception:
+                        continue
+
+                # Apply date filter on story's latest date
+                if latest_date and len(selected_date_range) == 2:
+                    if not (selected_date_range[0] <= latest_date <= selected_date_range[1]):
+                        continue
+
+                clean_title = clean_text(rep_article.get('title', story.get('representative_title', 'Untitled')))
+                filtered_stories.append({
+                    'title': clean_title,
+                    'category': cat_name,
+                    'source': rep_article.get('source', 'Unknown'),
+                    'story_count': story['story_count'],
+                    'summary': story['summary'],
+                    'url': rep_article.get('url', None),
+                    'published_at': latest_date
+                })
         
         # Sort by date (most recent first)
         filtered_stories.sort(key=lambda x: x['published_at'] if x['published_at'] else datetime.min.date(), reverse=True)
@@ -549,6 +574,7 @@ def main():
                     story = top_stories[story_idx]
                     with col:
                         title_display = story['title'][:55] + "..." if len(story['title']) > 55 else story['title']
+                        date_display = story['published_at'].isoformat() if story.get('published_at') else "Unknown date"
                         
                         # Create clickable link if URL exists
                         if story['url']:
@@ -557,7 +583,8 @@ def main():
                                 <div class="news-title"><a href="{story['url']}" target="_blank" style="text-decoration: none; color: #1a1a1a;">{title_display}</a></div>
                                 <div class="news-meta">
                                     <span style="color: {CATEGORY_COLORS[story['category']]};">●</span> {story['category'][:25]}<br>
-                                     {story['source'][:30]}
+                                     {story['source'][:30]}<br>
+                                     <span style="color: #6b7280;">{date_display}</span>
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
@@ -567,7 +594,8 @@ def main():
                                 <div class="news-title">{title_display}</div>
                                 <div class="news-meta">
                                     <span style="color: {CATEGORY_COLORS[story['category']]};">●</span> {story['category'][:25]}<br>
-                                     {story['source'][:30]}
+                                     {story['source'][:30]}<br>
+                                     <span style="color: #6b7280;">{date_display}</span>
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
