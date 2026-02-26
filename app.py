@@ -418,6 +418,8 @@ def main():
     st.markdown("### Latest Headlines")
     
     # Get current date and time
+    # Auto-refresh to keep timestamp live
+    st.autorefresh(interval=30 * 1000, key="live_clock")
     current_time = datetime.now().strftime("%B %d, %Y • %I:%M %p")
     
     headlines = []
