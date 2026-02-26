@@ -384,12 +384,13 @@ def main():
         <div class="funnel-stage" style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);">
             <div class="funnel-value">{sources}</div>
             <div class="funnel-label">Sources</div>
+            <div style="font-size: 0.7rem; color: white; opacity: 0.8; margin-top: 3px;">1203 articles</div>
         </div>
         <div class="funnel-arrow">→</div>
         <div class="funnel-stage" style="background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);">
             <div class="funnel-value">{total_articles}</div>
             <div class="funnel-label">Total Articles</div>
-            <div style="font-size: 0.7rem; color: white; opacity: 0.8; margin-top: 3px;">({duplicate_urls} duplicate URLs)</div>
+            <div style="font-size: 0.7rem; color: white; opacity: 0.8; margin-top: 3px;">-{duplicate_urls} urls</div>
         </div>
         <div class="funnel-arrow">→</div>
         <div class="funnel-stage" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
