@@ -5,6 +5,7 @@ import plotly.express as px
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Auto News Intelligence", page_icon="🚗", layout="wide")
 
@@ -418,8 +419,15 @@ def main():
     st.markdown("### Latest Headlines")
     
     # Get current date and time
-    # Auto-refresh to keep timestamp live
-    st.autorefresh(interval=30 * 1000, key="live_clock")
+    # Auto-refresh to keep timestamp live (Streamlit Cloud safe)
+    try:
+        from streamlit_autorefresh import st_autorefresh
+        st_autorefresh(interval=30 * 1000, key="live_clock")
+    except Exception:
+        components.html(
+            "<script>setTimeout(() => { window.location.reload(); }, 30000);</script>",
+            height=0,
+        )
     current_time = datetime.now().strftime("%B %d, %Y • %I:%M %p")
     
     headlines = []
