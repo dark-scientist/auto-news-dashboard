@@ -5,6 +5,7 @@ import plotly.express as px
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Auto News Intelligence", page_icon="🚗", layout="wide")
@@ -428,7 +429,7 @@ def main():
             "<script>setTimeout(() => { window.location.reload(); }, 30000);</script>",
             height=0,
         )
-    current_time = datetime.now().strftime("%B %d, %Y • %I:%M %p")
+    current_time = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%B %d, %Y • %I:%M %p")
     
     headlines = []
     for cat_name, cat_data in data['categories'].items():
