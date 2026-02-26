@@ -318,9 +318,16 @@ def main():
         return
     
     # Extract metrics
-    total_input = 460  # Fixed total articles
+    total_input = data['stats']['total_input']  # Dynamic from results.json
     total_auto = data['stats']['total_automobile']
-    unique_sources = 11  # Fixed to 11 sources
+    
+    # Count unique sources dynamically
+    all_sources = set()
+    for cat_data in data['categories'].values():
+        for story in cat_data['stories']:
+            for article in story['articles']:
+                all_sources.add(article['source'])
+    unique_sources = len(all_sources)
     
     # Calculate deduplicated and clusters
     all_articles = []
@@ -329,22 +336,26 @@ def main():
         all_articles.extend(cat_data['stories'])
         unique_stories += cat_data['unique_stories']
     
-    total_deduplicated = 197  # Fixed deduplicated count
+    total_deduplicated = total_auto  # Same as automobile articles
     total_clusters = unique_stories
     active_categories = len([c for c in data['categories'] if data['categories'][c]['total_articles'] > 0])
     
     # Pipeline Metrics - Funnel Style
     
     # Calculate metrics
-    sources = 11
-    total_articles = 460
-    relevant_articles = 197
-    stories = 180
+    sources = unique_sources  # Dynamic from data
+    total_articles = total_input  # Use dynamic value
+    relevant_articles = total_auto  # Dynamic
+    stories = unique_stories  # Dynamic
     categories = 8
-    duplicates_removed = 17
-    irrelevant_removed = 263
+    duplicates_removed = total_auto - unique_stories  # Calculate from data
+    irrelevant_removed = total_articles - total_auto  # Calculate from data
     
     # Create funnel visualization with ombre blue shades
+    # Calculate duplicate URLs (total URLs - unique articles downloaded)
+    total_urls = 1204  # From all_links.txt
+    duplicate_urls = total_urls - total_articles
+    
     st.markdown(f"""
     <div class="funnel-container">
         <div class="funnel-stage" style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);">
@@ -355,6 +366,7 @@ def main():
         <div class="funnel-stage" style="background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);">
             <div class="funnel-value">{total_articles}</div>
             <div class="funnel-label">Total Articles</div>
+            <div style="font-size: 0.7rem; color: white; opacity: 0.8; margin-top: 3px;">({total_urls} URLs - {duplicate_urls} duplicate URLs)</div>
         </div>
         <div class="funnel-arrow">→</div>
         <div class="funnel-stage" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
