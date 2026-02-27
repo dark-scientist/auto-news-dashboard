@@ -1,5 +1,6 @@
 import html
 import json
+import os
 import random
 from datetime import datetime
 from pathlib import Path
@@ -444,6 +445,16 @@ def format_run_at(run_at_value) -> str:
 
 
 def load_data():
+    env_results_path = clean_text(os.getenv("RESULTS_JSON_PATH", ""))
+    if env_results_path:
+        configured_path = Path(env_results_path).expanduser()
+        if configured_path.exists():
+            try:
+                with configured_path.open("r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                return None
+
     local_path = Path("results.json")
     app_dir_path = Path(__file__).resolve().parent / "results.json"
     results_path = local_path if local_path.exists() else app_dir_path
