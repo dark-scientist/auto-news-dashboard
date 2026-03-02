@@ -648,12 +648,25 @@ def get_story_importance_score(story) -> float:
     return score
 
 
-def collect_ranked_stories(data):
+def collect_ranked_stories(data, days_back=7):
+    """Collect and rank stories, optionally filtering by date."""
+    from datetime import timedelta
+    
     ranked = []
+    cutoff_date = None
+    if days_back:
+        cutoff_date = (datetime.now() - timedelta(days=days_back)).date()
+    
     for category_name, category_payload in get_categories(data).items():
         for story in get_story_list(category_payload):
             representative_article = get_story_representative_article(story)
             published_dt = parse_datetime(representative_article.get("published_at"))
+            
+            # Skip if date filtering is enabled and article is too old
+            if cutoff_date and published_dt:
+                if published_dt.date() < cutoff_date:
+                    continue
+            
             title = clean_text(story.get("representative_title")) or "Untitled"
             ranked.append(
                 {
@@ -856,15 +869,29 @@ def render_story_details(story, index: int):
 
 
 def render_top_stories_grid(data):
-    st.markdown('<div class="section-title">Top Stories</div>', unsafe_allow_html=True)
+    from datetime import timedelta
+    
+    st.markdown('<div class="section-title">Top Stories (Last 7 Days)</div>', unsafe_allow_html=True)
     categories = get_categories(data)
+    cutoff_date = (datetime.now() - timedelta(days=7)).date()
 
     for start_idx in range(0, len(CATEGORY_NAMES), 4):
         cols = st.columns(4, gap="small")
         for offset, category_name in enumerate(CATEGORY_NAMES[start_idx : start_idx + 4]):
             with cols[offset]:
                 category_payload = categories.get(category_name) or {}
-                stories = sorted(get_story_list(category_payload), key=get_story_importance_score, reverse=True)
+                all_stories = get_story_list(category_payload)
+                
+                # Filter stories by date (last 7 days)
+                recent_stories = []
+                for story in all_stories:
+                    rep_article = get_story_representative_article(story)
+                    pub_dt = parse_datetime(rep_article.get("published_at"))
+                    if pub_dt and pub_dt.date() >= cutoff_date:
+                        recent_stories.append(story)
+                
+                # Sort by importance and take top 3
+                stories = sorted(recent_stories, key=get_story_importance_score, reverse=True)
                 top_rows = []
                 for story in stories[:3]:
                     title = clean_text(story.get("representative_title")) or "Untitled"
@@ -890,6 +917,7 @@ def render_top_stories_grid(data):
                     </div>
                     """,
                     unsafe_allow_html=True,
+                )
                 )
 
 
