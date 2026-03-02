@@ -612,21 +612,13 @@ def get_story_representative_article(story):
     if not articles:
         return {}
 
+    # First, try to find the article marked as representative
     for article in articles:
         if article.get("is_representative"):
             return article
 
-    best_article = articles[0]
-    best_date = parse_datetime(best_article.get("published_at"))
-    best_date_value = best_date.date() if best_date else None
-    for article in articles[1:]:
-        current_date = parse_datetime(article.get("published_at"))
-        current_date_value = current_date.date() if current_date else None
-        if current_date_value and (best_date_value is None or current_date_value > best_date_value):
-            best_article = article
-            best_date = current_date
-            best_date_value = current_date_value
-    return best_article
+    # Fallback: return the first article (don't search for latest date)
+    return articles[0]
 
 
 def make_clickable_url(url, title: str) -> str:
