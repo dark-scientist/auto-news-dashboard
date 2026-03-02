@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-st.set_page_config(page_title="Auto News Intelligence", page_icon="🚗", layout="wide")
+st.set_page_config(page_title="Automotive News Monitoring Dashboard", page_icon="🚗", layout="wide")
 
 # TODO: Replace with proper auth before production
 USERS = {
@@ -1351,8 +1351,8 @@ def render_login() -> bool:
         """
         <div class="login-panel">
             <div class="login-shell">
-                <div class="login-logo">AN</div>
-                <p class="login-title">Auto News Intelligence</p>
+                <div class="login-logo">🚗</div>
+                <p class="login-title">Automotive News Monitoring Dashboard</p>
                 <p class="login-subtitle">Secure dashboard access</p>
             </div>
         </div>
@@ -1395,7 +1395,7 @@ def main():
         return
 
     metrics = compute_metrics(data)
-    st.title("Auto News Intelligence Dashboard")
+    st.title("🚗 Automotive News Monitoring Dashboard")
     st.caption(f"Last updated: {metrics['last_updated'] if metrics['last_updated'] != '-' else '—'}")
 
     subtle_hr()
