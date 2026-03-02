@@ -918,7 +918,6 @@ def render_top_stories_grid(data):
                     """,
                     unsafe_allow_html=True,
                 )
-                )
 
 
 def build_recent_story_rows(data, selected_range, selected_category):
