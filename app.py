@@ -910,19 +910,21 @@ def build_recent_story_rows(data, selected_range, selected_category):
 
         for story in get_story_list(category_payload):
             articles = story.get("articles") or []
-            representative_article = articles[0] if articles else {}
-            latest_date = None
+            
+            # Use the representative article (not the latest date from duplicates)
+            representative_article = next(
+                (a for a in articles if a.get("is_representative")), 
+                articles[0] if articles else {}
+            )
+            
+            published_at = parse_datetime(representative_article.get("published_at"))
+            if not published_at:
+                continue
+                
+            published_date = published_at.date()
 
-            for article in articles:
-                published_at = parse_datetime(article.get("published_at"))
-                if not published_at:
-                    continue
-                if latest_date is None or published_at.date() > latest_date:
-                    latest_date = published_at.date()
-                    representative_article = article
-
-            if latest_date and selected_range and len(selected_range) == 2:
-                if not (selected_range[0] <= latest_date <= selected_range[1]):
+            if selected_range and len(selected_range) == 2:
+                if not (selected_range[0] <= published_date <= selected_range[1]):
                     continue
 
             title = clean_text(representative_article.get("title"))
@@ -935,7 +937,7 @@ def build_recent_story_rows(data, selected_range, selected_category):
                     "category": category_name,
                     "source": normalize_source(representative_article.get("source")),
                     "url": make_clickable_url(representative_article.get("url"), title),
-                    "published_at": latest_date,
+                    "published_at": published_date,
                 }
             )
 
