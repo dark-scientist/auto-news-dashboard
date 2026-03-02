@@ -1201,6 +1201,7 @@ def render_category_pie(data):
 
 
 def render_scatter_section(data):
+    st.markdown("---")  # Add horizontal line
     st.markdown('<div class="section-title">Story Scatter Plot Visualization</div>', unsafe_allow_html=True)
     st.caption("Each bubble represents one clustered story. Bubble size maps to source count.")
 
