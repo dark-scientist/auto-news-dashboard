@@ -1252,6 +1252,21 @@ def render_detailed_stories(data):
 
     category_payload = get_categories(data).get(selected_category) or {}
     stories = get_story_list(category_payload)
+    
+    # Sort stories by date (newest first)
+    def get_story_date(story):
+        articles = story.get("articles", [])
+        for article in articles:
+            if article.get("is_representative") and article.get("published_at"):
+                return article.get("published_at")
+        # Fallback to any article with a date
+        for article in articles:
+            if article.get("published_at"):
+                return article.get("published_at")
+        return ""
+    
+    stories = sorted(stories, key=get_story_date, reverse=True)
+    
     total_articles, unique_stories = get_category_totals(category_payload)
     st.caption(f"{total_articles} articles · {unique_stories} stories")
 
@@ -1260,8 +1275,10 @@ def render_detailed_stories(data):
         summary = get_story_summary(story)
         sources = get_story_sources(story)
         story_count = get_story_count(story)
+        coherence_score = story.get("cluster_coherence_score")
 
-        with st.expander(f"Story #{index}: {title} ({story_count} sources)", expanded=False):
+        coherence_text = f" · Coherence: {coherence_score:.2f}" if coherence_score else ""
+        with st.expander(f"Story #{index}: {title} ({story_count} sources{coherence_text})", expanded=False):
             st.info(f"Summary: {summary}")
             st.caption(f"Covered by: {', '.join(sources) if sources else 'Unknown'}")
             subtle_hr()
@@ -1272,9 +1289,17 @@ def render_detailed_stories(data):
                 article_url = make_clickable_url(article.get("url"), article_title)
                 source = normalize_source(article.get("source"))
                 published = clean_text(str(article.get("published_at") or ""))[:10] or "N/A"
+                is_representative = article.get("is_representative", False)
+                cluster_reason = article.get("cluster_reason", "")
+                duplicate_reason = article.get("duplicate_reason", "")
 
                 st.markdown(f"{article_index}. **[{article_title}]({article_url})**")
                 st.caption(f"Source: {source} · Published: {published}")
+                
+                if cluster_reason:
+                    st.caption(f"🔍 Cluster Reason: {cluster_reason}")
+                if duplicate_reason:
+                    st.caption(f"🔄 Duplicate Reason: {duplicate_reason}")
 
 
 def render_login() -> bool:
