@@ -14,7 +14,6 @@ st.set_page_config(page_title="Auto News Intelligence", page_icon="🚗", layout
 
 # TODO: Replace with proper auth before production
 USERS = {
-    "auto2026": "demo123",
     "xdas_tatamotors": "Tk9mP3xR8vL2qW6nZ4jH",
 }
 
@@ -869,7 +868,7 @@ def render_story_details(story, index: int):
         pills = "".join(f'<span class="source-pill">{html.escape(source)}</span>' for source in sources)
         st.markdown(pills, unsafe_allow_html=True)
 
-    st.caption(f"Covered by {story_count} sources")
+    st.caption(f"Covered by {story_count} {'source' if story_count == 1 else 'sources'}")
 
     cluster_reason = clean_text(story.get("cluster_reason"))
     if cluster_reason:
@@ -1286,7 +1285,7 @@ def render_detailed_stories(data):
         sources = get_story_sources(story)
         story_count = get_story_count(story)
 
-        with st.expander(f"Story #{index}: {title} ({story_count} sources)", expanded=False):
+        with st.expander(f"Story #{index}: {title} ({story_count} {'source' if story_count == 1 else 'sources'})", expanded=False):
             st.info(f"Summary: {summary}")
             st.caption(f"Covered by: {', '.join(sources) if sources else 'Unknown'}")
             subtle_hr()
