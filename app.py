@@ -819,8 +819,17 @@ def render_pipeline_funnel(metrics):
 
 def render_headline_ticker(data):
     st.markdown('<div class="section-title">Latest Headlines</div>', unsafe_allow_html=True)
+    
+    # Get stories sorted by date (newest first) instead of by importance
+    all_stories = collect_ranked_stories(data, days_back=7)
+    # Re-sort by date only (newest first)
+    all_stories.sort(
+        key=lambda row: row["published_at"] if row["published_at"] is not None else datetime.min.date(),
+        reverse=True
+    )
+    
     headlines = []
-    for row in collect_ranked_stories(data)[:15]:
+    for row in all_stories[:15]:
         safe_title = html.escape(row["title"][:120])
         safe_url = html.escape(row["url"], quote=True)
         headlines.append(f'<a href="{safe_url}" target="_blank" title="{safe_url}">• {safe_title}</a>')
