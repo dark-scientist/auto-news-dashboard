@@ -15,6 +15,7 @@ st.set_page_config(page_title="Auto News Intelligence", page_icon="🚗", layout
 # TODO: Replace with proper auth before production
 USERS = {
     "auto2026": "demo123",
+    "xdas_tatamotors": "Tk9mP3xR8vL2qW6nZ4jH",
 }
 
 CATEGORY_COLORS = {
@@ -1284,10 +1285,8 @@ def render_detailed_stories(data):
         summary = get_story_summary(story)
         sources = get_story_sources(story)
         story_count = get_story_count(story)
-        coherence_score = story.get("cluster_coherence_score")
 
-        coherence_text = f" · Coherence: {coherence_score:.2f}" if coherence_score else ""
-        with st.expander(f"Story #{index}: {title} ({story_count} sources{coherence_text})", expanded=False):
+        with st.expander(f"Story #{index}: {title} ({story_count} sources)", expanded=False):
             st.info(f"Summary: {summary}")
             st.caption(f"Covered by: {', '.join(sources) if sources else 'Unknown'}")
             subtle_hr()
