@@ -5,6 +5,7 @@ import random
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote_plus
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -29,6 +30,11 @@ CATEGORY_COLORS = {
 }
 
 CATEGORY_NAMES = list(CATEGORY_COLORS.keys())
+IST_TZ = ZoneInfo("Asia/Kolkata")
+
+
+def now_ist() -> datetime:
+    return datetime.now(IST_TZ)
 
 
 def apply_global_css() -> None:
@@ -428,10 +434,16 @@ def parse_datetime(value: str):
     except ValueError:
         pass
 
-    parse_attempts = [("%Y-%m-%d %H:%M:%S", 19), ("%Y-%m-%d", 10)]
+    parse_attempts = [
+        ("%Y-%m-%d %H:%M:%S", 19),
+        ("%Y-%m-%d", 10),
+        ("%d %b %Y, %I:%M %p IST", None),
+        ("%d %b %Y, %I:%M %p", None),
+    ]
     for fmt, length in parse_attempts:
         try:
-            return datetime.strptime(text[:length], fmt)
+            candidate = text if length is None else text[:length]
+            return datetime.strptime(candidate, fmt)
         except ValueError:
             continue
     return None
@@ -441,14 +453,18 @@ def format_run_at(run_at_value) -> str:
     dt = parse_datetime(run_at_value)
     if not dt:
         return "-"
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(IST_TZ)
     return dt.strftime("%d %b %Y, %H:%M")
 
 
 def get_run_date(data):
     run_dt = parse_datetime((data or {}).get("run_at"))
     if run_dt:
+        if run_dt.tzinfo is not None:
+            run_dt = run_dt.astimezone(IST_TZ)
         return run_dt.date()
-    return datetime.now().date()
+    return now_ist().date()
 
 
 def load_data():
@@ -636,6 +652,20 @@ def get_story_published_date(story, fallback_date=None):
     return fallback_date
 
 
+def get_story_latest_published_date(story, fallback_date=None):
+    latest_date = None
+    for article in story.get("articles") or []:
+        parsed = parse_datetime(article.get("published_at"))
+        if not parsed:
+            continue
+        candidate = parsed.date()
+        if latest_date is None or candidate > latest_date:
+            latest_date = candidate
+    if latest_date:
+        return latest_date
+    return fallback_date
+
+
 def make_clickable_url(url, title: str) -> str:
     cleaned_url = clean_text(url or "")
     if cleaned_url.startswith("http://") or cleaned_url.startswith("https://"):
@@ -671,7 +701,7 @@ def collect_ranked_stories(data, days_back=7):
     fallback_date = get_run_date(data)
     cutoff_date = None
     if days_back:
-        cutoff_date = (datetime.now() - timedelta(days=days_back)).date()
+        cutoff_date = (now_ist() - timedelta(days=days_back)).date()
     
     for category_name, category_payload in get_categories(data).items():
         for story in get_story_list(category_payload):
@@ -835,12 +865,27 @@ def render_pipeline_funnel(metrics):
 def render_headline_ticker(data):
     st.markdown('<div class="section-title">Latest Headlines</div>', unsafe_allow_html=True)
     
-    # Get stories sorted by date (newest first) instead of by importance
-    all_stories = collect_ranked_stories(data, days_back=7)
-    # Re-sort by date only (newest first)
+    # Latest Headlines should prioritize the newest publish date in each story.
+    all_stories = []
+    fallback_date = get_run_date(data)
+    for category_name, category_payload in get_categories(data).items():
+        for story in get_story_list(category_payload):
+            title = clean_text(story.get("representative_title")) or "Untitled"
+            all_stories.append(
+                {
+                    "title": title,
+                    "url": get_story_link(story),
+                    "published_at": get_story_latest_published_date(story, fallback_date=fallback_date),
+                    "score": get_story_importance_score(story),
+                }
+            )
+
     all_stories.sort(
-        key=lambda row: row["published_at"] if row["published_at"] is not None else datetime.min.date(),
-        reverse=True
+        key=lambda row: (
+            row["published_at"] if row["published_at"] is not None else datetime.min.date(),
+            row["score"],
+        ),
+        reverse=True,
     )
     
     headlines = []
@@ -854,7 +899,7 @@ def render_headline_ticker(data):
         return
 
     headline_text = " &nbsp;&nbsp; ".join(headlines)
-    now_text = datetime.now().strftime("%B %d, %Y • %I:%M %p")
+    now_text = now_ist().strftime("%B %d, %Y • %I:%M %p IST")
 
     st.markdown(
         f"""
@@ -898,7 +943,7 @@ def render_top_stories_grid(data):
     st.markdown('<div class="section-title">Top Stories (Last 7 Days)</div>', unsafe_allow_html=True)
     categories = get_categories(data)
     fallback_date = get_run_date(data)
-    cutoff_date = (datetime.now() - timedelta(days=7)).date()
+    cutoff_date = (now_ist() - timedelta(days=7)).date()
 
     for start_idx in range(0, len(CATEGORY_NAMES), 4):
         cols = st.columns(4, gap="small")
@@ -988,7 +1033,7 @@ def render_recent_news_grid(data):
 
     min_date, max_date = get_date_bounds(data)
     if not min_date or not max_date:
-        today = datetime.now().date()
+        today = now_ist().date()
         min_date = today
         max_date = today
 
