@@ -444,6 +444,13 @@ def format_run_at(run_at_value) -> str:
     return dt.strftime("%d %b %Y, %H:%M")
 
 
+def get_run_date(data):
+    run_dt = parse_datetime((data or {}).get("run_at"))
+    if run_dt:
+        return run_dt.date()
+    return datetime.now().date()
+
+
 def load_data():
     env_results_path = clean_text(os.getenv("RESULTS_JSON_PATH", ""))
     if env_results_path:
@@ -621,6 +628,14 @@ def get_story_representative_article(story):
     return articles[0]
 
 
+def get_story_published_date(story, fallback_date=None):
+    representative_article = get_story_representative_article(story)
+    published_dt = parse_datetime(representative_article.get("published_at"))
+    if published_dt:
+        return published_dt.date()
+    return fallback_date
+
+
 def make_clickable_url(url, title: str) -> str:
     cleaned_url = clean_text(url or "")
     if cleaned_url.startswith("http://") or cleaned_url.startswith("https://"):
@@ -653,18 +668,18 @@ def collect_ranked_stories(data, days_back=7):
     from datetime import timedelta
     
     ranked = []
+    fallback_date = get_run_date(data)
     cutoff_date = None
     if days_back:
         cutoff_date = (datetime.now() - timedelta(days=days_back)).date()
     
     for category_name, category_payload in get_categories(data).items():
         for story in get_story_list(category_payload):
-            representative_article = get_story_representative_article(story)
-            published_dt = parse_datetime(representative_article.get("published_at"))
+            published_date = get_story_published_date(story, fallback_date=fallback_date)
             
             # Skip if date filtering is enabled and article is too old
-            if cutoff_date and published_dt:
-                if published_dt.date() < cutoff_date:
+            if cutoff_date and published_date:
+                if published_date < cutoff_date:
                     continue
             
             title = clean_text(story.get("representative_title")) or "Untitled"
@@ -675,7 +690,7 @@ def collect_ranked_stories(data, days_back=7):
                     "title": title,
                     "url": get_story_link(story),
                     "score": get_story_importance_score(story),
-                    "published_at": published_dt.date() if published_dt else None,
+                    "published_at": published_date,
                 }
             )
     ranked.sort(
@@ -882,6 +897,7 @@ def render_top_stories_grid(data):
     
     st.markdown('<div class="section-title">Top Stories (Last 7 Days)</div>', unsafe_allow_html=True)
     categories = get_categories(data)
+    fallback_date = get_run_date(data)
     cutoff_date = (datetime.now() - timedelta(days=7)).date()
 
     for start_idx in range(0, len(CATEGORY_NAMES), 4):
@@ -894,9 +910,8 @@ def render_top_stories_grid(data):
                 # Filter stories by date (last 7 days)
                 recent_stories = []
                 for story in all_stories:
-                    rep_article = get_story_representative_article(story)
-                    pub_dt = parse_datetime(rep_article.get("published_at"))
-                    if pub_dt and pub_dt.date() >= cutoff_date:
+                    published_date = get_story_published_date(story, fallback_date=fallback_date)
+                    if published_date and published_date >= cutoff_date:
                         recent_stories.append(story)
                 
                 # Sort by importance and take top 3
@@ -931,25 +946,17 @@ def render_top_stories_grid(data):
 
 def build_recent_story_rows(data, selected_range, selected_category):
     rows = []
+    fallback_date = get_run_date(data)
 
     for category_name, category_payload in get_categories(data).items():
         if selected_category != "All Categories" and category_name != selected_category:
             continue
 
         for story in get_story_list(category_payload):
-            articles = story.get("articles") or []
-            
-            # Use the representative article (not the latest date from duplicates)
-            representative_article = next(
-                (a for a in articles if a.get("is_representative")), 
-                articles[0] if articles else {}
-            )
-            
-            published_at = parse_datetime(representative_article.get("published_at"))
-            if not published_at:
+            representative_article = get_story_representative_article(story)
+            published_date = get_story_published_date(story, fallback_date=fallback_date)
+            if not published_date:
                 continue
-                
-            published_date = published_at.date()
 
             if selected_range and len(selected_range) == 2:
                 if not (selected_range[0] <= published_date <= selected_range[1]):
@@ -1261,20 +1268,14 @@ def render_detailed_stories(data):
 
     category_payload = get_categories(data).get(selected_category) or {}
     stories = get_story_list(category_payload)
+    fallback_date = get_run_date(data)
     
-    # Sort stories by date (newest first)
-    def get_story_date(story):
-        articles = story.get("articles", [])
-        for article in articles:
-            if article.get("is_representative") and article.get("published_at"):
-                return article.get("published_at")
-        # Fallback to any article with a date
-        for article in articles:
-            if article.get("published_at"):
-                return article.get("published_at")
-        return ""
-    
-    stories = sorted(stories, key=get_story_date, reverse=True)
+    # Sort stories by parsed date (newest first), with run date fallback.
+    stories = sorted(
+        stories,
+        key=lambda story: get_story_published_date(story, fallback_date=fallback_date) or datetime.min.date(),
+        reverse=True,
+    )
     
     total_articles, unique_stories = get_category_totals(category_payload)
     st.caption(f"{total_articles} articles · {unique_stories} stories")
