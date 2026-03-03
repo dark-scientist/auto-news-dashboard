@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Automotive News Monitoring Dashboard", page_icon="🚗", layout="wide")
 
@@ -35,6 +36,20 @@ IST_TZ = ZoneInfo("Asia/Kolkata")
 
 def now_ist() -> datetime:
     return datetime.now(IST_TZ)
+
+
+def auto_reload_page(interval_seconds: int = 60) -> None:
+    safe_interval = max(int(interval_seconds), 15)
+    components.html(
+        f"""
+        <script>
+        setTimeout(function() {{
+            window.parent.location.reload();
+        }}, {safe_interval * 1000});
+        </script>
+        """,
+        height=0,
+    )
 
 
 def apply_global_css() -> None:
@@ -666,6 +681,18 @@ def get_story_latest_published_date(story, fallback_date=None):
     return fallback_date
 
 
+def get_story_latest_actual_date(story):
+    latest_date = None
+    for article in story.get("articles") or []:
+        parsed = parse_datetime(article.get("published_at"))
+        if not parsed:
+            continue
+        candidate = parsed.date()
+        if latest_date is None or candidate > latest_date:
+            latest_date = candidate
+    return latest_date
+
+
 def make_clickable_url(url, title: str) -> str:
     cleaned_url = clean_text(url or "")
     if cleaned_url.startswith("http://") or cleaned_url.startswith("https://"):
@@ -868,21 +895,28 @@ def render_headline_ticker(data):
     # Latest Headlines should prioritize the newest publish date in each story.
     all_stories = []
     fallback_date = get_run_date(data)
+    today_ist = now_ist().date()
     for category_name, category_payload in get_categories(data).items():
         for story in get_story_list(category_payload):
             title = clean_text(story.get("representative_title")) or "Untitled"
+            latest_actual_date = get_story_latest_actual_date(story)
+            latest_date = latest_actual_date if latest_actual_date else fallback_date
             all_stories.append(
                 {
                     "title": title,
                     "url": get_story_link(story),
-                    "published_at": get_story_latest_published_date(story, fallback_date=fallback_date),
+                    "published_at": latest_date,
+                    "has_actual_date": latest_actual_date is not None,
+                    "is_today_actual": latest_actual_date == today_ist if latest_actual_date else False,
                     "score": get_story_importance_score(story),
                 }
             )
 
     all_stories.sort(
         key=lambda row: (
+            row["is_today_actual"],
             row["published_at"] if row["published_at"] is not None else datetime.min.date(),
+            row["has_actual_date"],
             row["score"],
         ),
         reverse=True,
@@ -1424,6 +1458,7 @@ def render_login() -> bool:
 
 def main():
     apply_global_css()
+    auto_reload_page(interval_seconds=60)
 
     if not render_login():
         return
