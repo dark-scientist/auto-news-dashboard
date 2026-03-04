@@ -2,7 +2,7 @@ import html
 import json
 import os
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
@@ -732,7 +732,8 @@ def collect_ranked_stories(data, days_back=7):
     
     for category_name, category_payload in get_categories(data).items():
         for story in get_story_list(category_payload):
-            published_date = get_story_published_date(story, fallback_date=fallback_date)
+            # Use latest article date in the story so recently updated clusters surface correctly.
+            published_date = get_story_latest_published_date(story, fallback_date=fallback_date)
             
             # Skip if date filtering is enabled and article is too old
             if cutoff_date and published_date:
@@ -1033,7 +1034,8 @@ def build_recent_story_rows(data, selected_range, selected_category):
 
         for story in get_story_list(category_payload):
             representative_article = get_story_representative_article(story)
-            published_date = get_story_published_date(story, fallback_date=fallback_date)
+            # Use latest article date in the story so recently updated clusters surface correctly.
+            published_date = get_story_latest_published_date(story, fallback_date=fallback_date)
             if not published_date:
                 continue
 
@@ -1066,16 +1068,24 @@ def render_recent_news_grid(data):
         st.session_state.grid_page = 0
 
     min_date, max_date = get_date_bounds(data)
+    run_date = get_run_date(data)
     if not min_date or not max_date:
-        today = now_ist().date()
-        min_date = today
-        max_date = today
+        min_date = run_date
+        max_date = run_date
+    else:
+        max_date = max(max_date, run_date)
+
+    default_start = max(min_date, max_date - timedelta(days=30))
+    bounds_marker = (min_date, max_date)
+    if st.session_state.get("date_filter_bounds") != bounds_marker:
+        st.session_state["date_filter"] = (default_start, max_date)
+        st.session_state["date_filter_bounds"] = bounds_marker
 
     filter_col1, filter_col2 = st.columns([1.2, 1], gap="small")
     with filter_col1:
         selected_range = st.date_input(
             "Date Range",
-            value=(min_date, max_date),
+            value=(default_start, max_date),
             min_value=min_date,
             max_value=max_date,
             key="date_filter",
@@ -1458,7 +1468,7 @@ def render_login() -> bool:
 
 def main():
     apply_global_css()
-    auto_reload_page(interval_seconds=60)
+    auto_reload_page(interval_seconds=15)
 
     if not render_login():
         return
