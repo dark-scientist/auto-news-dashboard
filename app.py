@@ -725,7 +725,6 @@ def collect_ranked_stories(data, days_back=7):
     from datetime import timedelta
     
     ranked = []
-    fallback_date = get_run_date(data)
     cutoff_date = None
     if days_back:
         cutoff_date = (now_ist() - timedelta(days=days_back)).date()
@@ -733,12 +732,15 @@ def collect_ranked_stories(data, days_back=7):
     for category_name, category_payload in get_categories(data).items():
         for story in get_story_list(category_payload):
             # Use latest article date in the story so recently updated clusters surface correctly.
-            published_date = get_story_latest_published_date(story, fallback_date=fallback_date)
+            published_date = get_story_latest_actual_date(story)
+            
+            # Skip stories without actual published dates
+            if not published_date:
+                continue
             
             # Skip if date filtering is enabled and article is too old
-            if cutoff_date and published_date:
-                if published_date < cutoff_date:
-                    continue
+            if cutoff_date and published_date < cutoff_date:
+                continue
             
             title = clean_text(story.get("representative_title")) or "Untitled"
             ranked.append(
@@ -752,10 +754,7 @@ def collect_ranked_stories(data, days_back=7):
                 }
             )
     ranked.sort(
-        key=lambda row: (
-            row["score"],
-            row["published_at"] if row["published_at"] is not None else datetime.min.date(),
-        ),
+        key=lambda row: (row["score"], row["published_at"]),
         reverse=True,
     )
     return ranked
@@ -895,20 +894,23 @@ def render_headline_ticker(data):
     
     # Latest Headlines should prioritize the newest publish date in each story.
     all_stories = []
-    fallback_date = get_run_date(data)
     today_ist = now_ist().date()
     for category_name, category_payload in get_categories(data).items():
         for story in get_story_list(category_payload):
             title = clean_text(story.get("representative_title")) or "Untitled"
             latest_actual_date = get_story_latest_actual_date(story)
-            latest_date = latest_actual_date if latest_actual_date else fallback_date
+            
+            # Skip stories without actual published dates
+            if latest_actual_date is None:
+                continue
+                
             all_stories.append(
                 {
                     "title": title,
                     "url": get_story_link(story),
-                    "published_at": latest_date,
-                    "has_actual_date": latest_actual_date is not None,
-                    "is_today_actual": latest_actual_date == today_ist if latest_actual_date else False,
+                    "published_at": latest_actual_date,
+                    "has_actual_date": True,
+                    "is_today_actual": latest_actual_date == today_ist,
                     "score": get_story_importance_score(story),
                 }
             )
@@ -916,8 +918,7 @@ def render_headline_ticker(data):
     all_stories.sort(
         key=lambda row: (
             row["is_today_actual"],
-            row["published_at"] if row["published_at"] is not None else datetime.min.date(),
-            row["has_actual_date"],
+            row["published_at"],
             row["score"],
         ),
         reverse=True,
@@ -977,7 +978,6 @@ def render_top_stories_grid(data):
     
     st.markdown('<div class="section-title">Top Stories (Last 7 Days)</div>', unsafe_allow_html=True)
     categories = get_categories(data)
-    fallback_date = get_run_date(data)
     cutoff_date = (now_ist() - timedelta(days=7)).date()
 
     for start_idx in range(0, len(CATEGORY_NAMES), 4):
@@ -987,10 +987,10 @@ def render_top_stories_grid(data):
                 category_payload = categories.get(category_name) or {}
                 all_stories = get_story_list(category_payload)
                 
-                # Filter stories by date (last 7 days)
+                # Filter stories by date (last 7 days) - only include stories with actual dates
                 recent_stories = []
                 for story in all_stories:
-                    published_date = get_story_published_date(story, fallback_date=fallback_date)
+                    published_date = get_story_latest_actual_date(story)
                     if published_date and published_date >= cutoff_date:
                         recent_stories.append(story)
                 
@@ -1003,7 +1003,7 @@ def render_top_stories_grid(data):
                     top_rows.append((title, url))
 
                 if not top_rows:
-                    top_rows = [("No stories available", "")]
+                    top_rows = [("No recent stories", "")]
 
                 titles_html = ""
                 for title, url in top_rows:
@@ -1026,7 +1026,6 @@ def render_top_stories_grid(data):
 
 def build_recent_story_rows(data, selected_range, selected_category):
     rows = []
-    fallback_date = get_run_date(data)
 
     for category_name, category_payload in get_categories(data).items():
         if selected_category != "All Categories" and category_name != selected_category:
@@ -1035,7 +1034,9 @@ def build_recent_story_rows(data, selected_range, selected_category):
         for story in get_story_list(category_payload):
             representative_article = get_story_representative_article(story)
             # Use latest article date in the story so recently updated clusters surface correctly.
-            published_date = get_story_latest_published_date(story, fallback_date=fallback_date)
+            published_date = get_story_latest_actual_date(story)
+            
+            # Skip stories without actual published dates
             if not published_date:
                 continue
 
@@ -1057,7 +1058,7 @@ def build_recent_story_rows(data, selected_range, selected_category):
                 }
             )
 
-    rows.sort(key=lambda item: item["published_at"] or datetime.min.date(), reverse=True)
+    rows.sort(key=lambda item: item["published_at"], reverse=True)
     return rows
 
 
@@ -1468,7 +1469,7 @@ def render_login() -> bool:
 
 def main():
     apply_global_css()
-    auto_reload_page(interval_seconds=15)
+    # auto_reload_page(interval_seconds=15)  # Disabled to prevent logout and hard refresh
 
     if not render_login():
         return
